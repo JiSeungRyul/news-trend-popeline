@@ -1,0 +1,4 @@
+# 민감 정보
+.env
+keys/
+data/
