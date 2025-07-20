@@ -3,8 +3,13 @@ import pandas as pd
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import csv
+import re
 
-load_dotenv(dotenv_path="../keys/.env")
+load_dotenv()
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 def extract_top_headlines(max_articles=30):
     api_key = os.getenv("GNEWS_API_KEY")
@@ -12,7 +17,9 @@ def extract_top_headlines(max_articles=30):
         raise ValueError("GNEWS_API_KEY is not set in .env")
     
     url = "https://gnews.io/api/v4/top-headlines"
+    # url = "https://gnews.io/api/v4/search"
     params = {
+        "q": "한국",
         "lang": "ko",
         "country": "kr",
         "max": max_articles,
@@ -20,6 +27,7 @@ def extract_top_headlines(max_articles=30):
     }
 
     response = requests.get(url, params=params)
+    response.encoding = 'utf-8'
     response.raise_for_status()
     articles = response.json().get("articles", [])
 
@@ -35,11 +43,20 @@ def extract_top_headlines(max_articles=30):
         })
 
     df = pd.DataFrame(data)
+    # df = df[df["title"].apply(is_korean)]
     return df
+
+def is_korean(text):
+    return bool(text) and re.search(r"[가-힣]", text)
 
 if __name__ == "__main__":
     today = datetime.now().strftime("%Y-%m-%d")
     df = extract_top_headlines()
     print(df.head())
-    os.makedirs("../data", exist_ok=True)
-    df.to_csv(f"../data/news_{today}.csv", index=False)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    df.to_csv(
+        os.path.join(DATA_DIR, f"news_{today}.csv"), 
+        index=False, 
+        quoting=csv.QUOTE_ALL,
+        escapechar="\\",
+        encoding="utf-8")
