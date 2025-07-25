@@ -1,0 +1,93 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  webserver:
+    image: apache/airflow:2.8.1
+    depends_on:
+      - postgres
+    environment:
+      # AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'True'
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /keys/gcp-key.json
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./keys:/keys
+    ports:
+      - "8080:8080"
+    command: webserver
+
+  scheduler:
+    image: apache/airflow:2.8.1
+    depends_on:
+      - webserver
+    environment:
+      # AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /keys/gcp-key.json
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./keys:/keys
+    command: scheduler
+
+  worker:
+    image: apache/airflow:2.8.1
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /keys/gcp-key.json
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./keys:/keys
+    command: celery worker
+
+  airflow-init:
+    image: apache/airflow:2.8.1
+    depends_on:
+      - postgres
+    environment:
+      # AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    entrypoint: >
+      bash -c "airflow db init && airflow users create 
+      --username airflow 
+      --firstname airflow
+      --lastname ji 
+      --role Admin 
+      --email jisr5736@gmail.com 
+      --password airflow"
